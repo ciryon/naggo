@@ -1,0 +1,69 @@
+name: release
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # needed to create/upload releases
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux # common server targets
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin # Apple Silicon + Intel
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: windows
+            goarch: amd64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Derive version from tag
+        id: meta
+        run: |
+          echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Build
+        env:
+          CGO_ENABLED: 0
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          bin_name=naggo
+          ext=""
+          if [ "$GOOS" = "windows" ]; then ext=".exe"; fi
+          out="dist/${bin_name}_${VERSION}_${GOOS}_${GOARCH}${ext}"
+          mkdir -p dist
+          go build -ldflags "-s -w -X main.version=${VERSION}" -o "$out" ./cmd/naggo || go build -ldflags "-s -w -X main.version=${VERSION}" -o "$out" .
+          # zip each artifact to keep permissions & portability
+          (cd dist && zip "${bin_name}_${VERSION}_${GOOS}_${GOARCH}.zip" "$(basename "$out")")
+
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum *.zip > SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.version }}
+          name: ${{ steps.meta.outputs.version }}
+          draft: false
+          prerelease: false
+          files: |
+            dist/*.zip
+            dist/SHA256SUMS
