@@ -36,6 +36,12 @@ jobs:
         run: |
           if [ "${{ matrix.goarch }}" = "arm64" ]; then
             sudo dpkg --add-architecture arm64
+            sudo tee /etc/apt/sources.list.d/ubuntu-arm64.list > /dev/null <<'EOF'
+deb [arch=arm64] http://ports.ubuntu.com/ jammy main restricted universe multiverse
+deb [arch=arm64] http://ports.ubuntu.com/ jammy-updates main restricted universe multiverse
+deb [arch=arm64] http://ports.ubuntu.com/ jammy-security main restricted universe multiverse
+deb [arch=arm64] http://ports.ubuntu.com/ jammy-backports main restricted universe multiverse
+EOF
           fi
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config
