@@ -31,6 +31,15 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Install Linux build deps
+        if: ${{ matrix.goos == 'linux' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libasound2-dev
+          if [ "${{ matrix.goarch }}" = "arm64" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu
+          fi
+
       - name: Derive version from tag
         id: meta
         run: |
@@ -38,7 +47,6 @@ jobs:
 
       - name: Build
         env:
-          CGO_ENABLED: 0
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           VERSION: ${{ steps.meta.outputs.version }}
@@ -48,7 +56,15 @@ jobs:
           if [ "$GOOS" = "windows" ]; then ext=".exe"; fi
           out="dist/${bin_name}_${VERSION}_${GOOS}_${GOARCH}${ext}"
           mkdir -p dist
-          go build -ldflags "-s -w -X main.version=${VERSION}" -o "$out" ./cmd/naggo || go build -ldflags "-s -w -X main.version=${VERSION}" -o "$out" .
+          if [ "$GOOS" = "linux" ]; then
+            export CGO_ENABLED=1
+            if [ "$GOARCH" = "arm64" ]; then
+              export CC=aarch64-linux-gnu-gcc
+            fi
+          else
+            export CGO_ENABLED=0
+          fi
+          go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "$out" .
           # zip each artifact to keep permissions & portability
           (cd dist && zip "${bin_name}_${VERSION}_${GOOS}_${GOARCH}.zip" "$(basename "$out")")
 
