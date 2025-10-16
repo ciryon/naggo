@@ -15,6 +15,8 @@ Sound playback uses built-in synthesized tones, so no external assets or players
 go install github.com/ciryon/naggo@latest
 ```
 
+Sound works out of the box—`naggo` uses pure-Go waveforms, so you do **not** need ALSA or CoreAudio headers when installing or running.
+
 This drops a `naggo` binary into your `$GOBIN` (default: `$GOPATH/bin`). Make sure that directory is on your `$PATH`, then launch with:
 
 ```bash
@@ -33,10 +35,10 @@ go build -o naggo
 To cross-compile for another platform:
 
 ```bash
-GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/naggo-darwin-arm64
+GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o dist/naggo-darwin-arm64
 ```
 
-Repeat with the desired `GOOS`/`GOARCH` pairs (e.g. `linux/amd64`, `windows/amd64`) before uploading release artifacts.
+Repeat with the desired `GOOS`/`GOARCH` pairs (e.g. `linux/amd64`, `linux/arm64`) before uploading release artifacts. Keeping `CGO_ENABLED=0` ensures the build stays portable on Linux and macOS without extra native dependencies.
 
 ## Releasing on GitHub
 
@@ -47,7 +49,7 @@ Repeat with the desired `GOOS`/`GOARCH` pairs (e.g. `linux/amd64`, `windows/amd6
    git push origin v0.1.0
    ```
 
-2. Build binaries for the platforms you want to support (see cross-compile snippet above) and attach them to the GitHub release.
+2. Build binaries for the platforms you want to support (see cross-compile snippet above, or use the provided GitHub Actions workflow) and attach them to the GitHub release.
 3. Users can either download those archives or run `go install github.com/ciryon/naggo@latest`.
 
 ## Controls

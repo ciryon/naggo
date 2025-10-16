@@ -1,28 +1,56 @@
-name: ci
+name: CI
+
 on:
   push:
+    branches: [main, master]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  build:
+  lint:
+    name: Go Vet
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod # respects 'toolchain' directive
-          check-latest: true
+          go-version-file: go.mod
+      - name: Go vet (CGO disabled)
+        run: CGO_ENABLED=0 go vet ./...
 
-      # Ensure deps are there but don't rewrite files
-      - name: Download modules
-        run: go mod download
-
-      - name: Vet
-        run: go vet ./...
-
-      # Build fails if module graph needs changes (read-only)
-      - name: Build (read-only mod graph)
+  build:
+    name: Build binaries
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build ${{ matrix.target.goos }}-${{ matrix.target.goarch }}
         env:
-          GOFLAGS: -mod=readonly
-        run: go build -v ./...
+          GOOS: ${{ matrix.target.goos }}
+          GOARCH: ${{ matrix.target.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist
+          go build -trimpath -ldflags="-s -w" -o "dist/naggo_${GOOS}_${GOARCH}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: naggo-${{ matrix.target.goos }}-${{ matrix.target.goarch }}
+          path: dist/naggo_${{ matrix.target.goos }}_${{ matrix.target.goarch }}
