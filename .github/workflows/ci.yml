@@ -8,12 +8,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
-      - name: Verify module
-        run: go mod tidy && git diff --quiet || (echo "Run 'go mod tidy' locally" && exit 1)
+          go-version-file: go.mod # respects 'toolchain' directive
+          check-latest: true
+
+      # Ensure deps are there but don't rewrite files
+      - name: Download modules
+        run: go mod download
+
       - name: Vet
         run: go vet ./...
-      - name: Build (sanity)
+
+      # Build fails if module graph needs changes (read-only)
+      - name: Build (read-only mod graph)
+        env:
+          GOFLAGS: -mod=readonly
         run: go build -v ./...
