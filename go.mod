@@ -1,7 +1,6 @@
 module github.com/ciryon/naggo
 
 go 1.25.1
-toolchain 1.25.1
 
 
 require (
