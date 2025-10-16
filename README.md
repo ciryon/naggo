@@ -1,18 +1,67 @@
-# Nag.go
+# naggo
 
-A dead-simple TUI app where you set a timer
-that will nag you after it's completed.
+`naggo` is a tiny terminal UI timer that politely nags you until you acknowledge it. Set an interval, keep working, and let the animated ASCII countdown plus configurable alarm sounds do the rest.
 
-## Building
+## Requirements
 
-### Get dependencies
+- Go 1.22+ (module tested with Go 1.25)
+- A terminal that supports ANSI colours (most do)
 
-go mod init nag && go get github.com/charmbracelet/bubbletea github.com/charmbracelet/lipgloss github.com/gen2brain/beeep
+Sound playback uses the embedded `sounds/*.wav` assets, so no external players are required.
 
-### Build
+## Install
 
-go build -o nag
+```bash
+go install github.com/ciryon/naggo@latest
+```
 
-### Run
+This drops a `naggo` binary into your `$GOBIN` (default: `$GOPATH/bin`). Make sure that directory is on your `$PATH`, then launch with:
 
-./nag
+```bash
+naggo
+```
+
+## Build From Source
+
+```bash
+git clone https://github.com/ciryon/naggo.git
+cd naggo
+go build -o naggo
+./naggo
+```
+
+To cross-compile for another platform:
+
+```bash
+GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/naggo-darwin-arm64
+```
+
+Repeat with the desired `GOOS`/`GOARCH` pairs (e.g. `linux/amd64`, `windows/amd64`) before uploading release artifacts.
+
+## Releasing on GitHub
+
+1. Update the changelog (if any) and bump version in your tag name, for example:
+
+   ```bash
+   git tag -a v0.1.0 -m "v0.1.0"
+   git push origin v0.1.0
+   ```
+
+2. Build binaries for the platforms you want to support (see cross-compile snippet above) and attach them to the GitHub release.
+3. Users can either download those archives or run `go install github.com/ciryon/naggo@latest`.
+
+## Controls
+
+- `space` start/pause
+- `s` stop (silence nag)
+- `up/down` ±1 minute (the last minute counts down in 1‑second steps)
+- `right/left` ±1 hour
+- `1`–`9` set timer to N minutes
+- `/` cycle alarm sound
+- `q` quit
+
+Enjoy the nag. 😄
+
+## Acknowledgements
+
+Thank you to Eletric Pocket Ltd for inspiration, many nags, and the original sound assets used in this project.

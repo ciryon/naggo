@@ -1,0 +1,20 @@
+# Build artifacts
+/nag
+/nag.exe
+/dist/
+
+# Go module cache overrides
+/.cache/
+/.gomodcache/
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Editor/IDE settings
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log
