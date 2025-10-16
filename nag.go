@@ -4,11 +4,9 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -17,8 +15,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/common-nighthawk/go-figure"
 	"github.com/gen2brain/beeep"
-	"github.com/go-audio/audio"
-	"github.com/go-audio/wav"
 	"github.com/hajimehoshi/oto/v2"
 )
 
@@ -312,13 +308,18 @@ func renderCountdownFigure(text string, visible bool, colonVisible bool) string 
 		}
 	}
 
+	for i := range lines {
+		if len(lines[i]) < countdownFigureWidth {
+			lines[i] += strings.Repeat(" ", countdownFigureWidth-len(lines[i]))
+		}
+	}
+
 	return strings.Join(lines, "\n")
 }
 
 type soundClip struct {
-	name       string
-	data       []byte
-	sampleRate int
+	name string
+	data []byte
 }
 
 func buildFigureChars() (map[rune][]string, int) {
@@ -412,18 +413,11 @@ func (m model) alarmName() string {
 }
 
 func loadSoundSet() soundSet {
-	loadClip := func(base string, fallback []toneSegment) soundClip {
-		if clip, err := loadWaveClip(base + ".wav"); err == nil {
-			clip.name = prettyName(base)
-			return clip
-		}
-		return generateToneClip(prettyName(base), fallback)
-	}
-
 	set := soundSet{}
-	set.switchClip = loadClip("switch", defaultSwitchTone())
-	set.stop = loadClip("stop", defaultStopTone())
-	set.adjust = loadClip("rad", defaultAdjustTone())
+
+	set.switchClip = generateToneClip("Switch", defaultSwitchTone())
+	set.stop = generateToneClip("Stop", defaultStopTone())
+	set.adjust = generateToneClip("Rad", defaultAdjustTone())
 
 	alarmDefinitions := []struct {
 		base     string
@@ -437,7 +431,7 @@ func loadSoundSet() soundSet {
 	}
 
 	for idx, def := range alarmDefinitions {
-		clip := loadClip(def.base, def.fallback)
+		clip := generateToneClip(prettyName(def.base), def.fallback)
 		set.alarms = append(set.alarms, clip)
 		if def.base == "siren" {
 			set.defaultAlarm = idx
@@ -458,88 +452,14 @@ type toneSegment struct {
 	amplitude float64
 }
 
-func loadWaveClip(filename string) (soundClip, error) {
-	path := filepath.Join("sounds", filename)
-	f, err := os.Open(path)
-	if err != nil {
-		return soundClip{}, err
-	}
-	defer f.Close()
-
-	decoder := wav.NewDecoder(f)
-	if !decoder.IsValidFile() {
-		return soundClip{}, errors.New("invalid wav file")
-	}
-
-	buf, err := decoder.FullPCMBuffer()
-	if err != nil {
-		return soundClip{}, err
-	}
-	if buf == nil || buf.Format == nil || len(buf.Data) == 0 {
-		return soundClip{}, errors.New("empty wav data")
-	}
-
-	data, sampleRate := intBufferToPCM16(buf)
-	if len(data) == 0 {
-		return soundClip{}, errors.New("unsupported wav data")
-	}
-
-	return soundClip{
-		name:       prettyName(filename),
-		data:       data,
-		sampleRate: sampleRate,
-	}, nil
-}
-
-func intBufferToPCM16(buf *audio.IntBuffer) ([]byte, int) {
-	if buf == nil || buf.Format == nil {
-		return nil, 0
-	}
-
-	floatBuf := buf.AsFloat32Buffer()
-	channels := floatBuf.Format.NumChannels
-	if channels <= 0 {
-		channels = 1
-	}
-
-	totalSamples := len(floatBuf.Data) / channels
-	if totalSamples <= 0 {
-		return nil, 0
-	}
-
-	out := make([]byte, totalSamples*2)
-	for i := 0; i < totalSamples; i++ {
-		var sample float32
-		for c := 0; c < channels; c++ {
-			sample += floatBuf.Data[i*channels+c]
-		}
-		sample /= float32(channels)
-		if sample > 1 {
-			sample = 1
-		} else if sample < -1 {
-			sample = -1
-		}
-		val := int16(sample * math.MaxInt16)
-		binary.LittleEndian.PutUint16(out[2*i:], uint16(val))
-	}
-
-	rate := floatBuf.Format.SampleRate
-	if rate == 0 {
-		rate = audioSampleRate
-	}
-
-	return out, rate
-}
-
 func generateToneClip(name string, segments []toneSegment) soundClip {
 	var data []byte
 	for _, seg := range segments {
 		data = append(data, synthSegment(seg)...)
 	}
 	return soundClip{
-		name:       name,
-		data:       data,
-		sampleRate: audioSampleRate,
+		name: name,
+		data: data,
 	}
 }
 
@@ -606,36 +526,6 @@ func envelope(i, total int) float64 {
 		env = 1
 	}
 	return env
-}
-
-func resamplePCM16(data []byte, fromRate, toRate int) []byte {
-	if fromRate <= 0 || toRate <= 0 || fromRate == toRate || len(data) == 0 {
-		return data
-	}
-	sampleCount := len(data) / 2
-	ratio := float64(toRate) / float64(fromRate)
-	outCount := int(math.Ceil(float64(sampleCount) * ratio))
-	if outCount <= 0 {
-		return nil
-	}
-	out := make([]byte, outCount*2)
-	for i := 0; i < outCount; i++ {
-		srcPos := float64(i) / ratio
-		srcIdx := int(srcPos)
-		if srcIdx >= sampleCount {
-			srcIdx = sampleCount - 1
-		}
-		nextIdx := srcIdx + 1
-		if nextIdx >= sampleCount {
-			nextIdx = sampleCount - 1
-		}
-		frac := srcPos - float64(srcIdx)
-		v1 := int16(binary.LittleEndian.Uint16(data[srcIdx*2:]))
-		v2 := int16(binary.LittleEndian.Uint16(data[nextIdx*2:]))
-		interp := float64(v1) + float64(v2-v1)*frac
-		binary.LittleEndian.PutUint16(out[i*2:], uint16(int16(interp)))
-	}
-	return out
 }
 
 func defaultSwitchTone() []toneSegment {
@@ -715,8 +605,8 @@ func defaultFiveBipTone() []toneSegment {
 	}
 }
 
-func prettyName(filename string) string {
-	base := strings.TrimSuffix(filename, filepath.Ext(filename))
+func prettyName(name string) string {
+	base := strings.TrimSuffix(name, ".wav")
 	parts := strings.FieldsFunc(base, func(r rune) bool {
 		return r == '-' || r == '_' || r == ' '
 	})
@@ -746,12 +636,7 @@ func playSound(clip soundClip) {
 			return
 		}
 
-		data := c.data
-		if c.sampleRate > 0 && c.sampleRate != audioSampleRate {
-			data = resamplePCM16(data, c.sampleRate, audioSampleRate)
-		}
-
-		player := ctx.NewPlayer(bytes.NewReader(data))
+		player := ctx.NewPlayer(bytes.NewReader(c.data))
 		player.Play()
 
 		ticker := time.NewTicker(25 * time.Millisecond)

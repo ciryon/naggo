@@ -1,7 +1,9 @@
 # Build artifacts
 /nag
+/naggo
 /nag.exe
 /dist/
+sounds/
 
 # Go module cache overrides
 /.cache/

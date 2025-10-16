@@ -7,7 +7,7 @@
 - Go 1.22+ (module tested with Go 1.25)
 - A terminal that supports ANSI colours (most do)
 
-Sound playback uses the embedded `sounds/*.wav` assets, so no external players are required.
+Sound playback uses built-in synthesized tones, so no external assets or players are required.
 
 ## Install
 
@@ -64,4 +64,4 @@ Enjoy the nag. 😄
 
 ## Acknowledgements
 
-Thank you to Eletric Pocket Ltd for inspiration, many nags, and the original sound assets used in this project.
+Thank you to Eletric Pocket Ltd for inspiration and many nags.
