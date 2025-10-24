@@ -1,5 +1,7 @@
 # naggo
 
+![Nag screenshot](docs/naggo.png)
+
 `naggo` is a tiny terminal UI timer that politely nags you until you acknowledge it. Set an interval, keep working, and let the animated ASCII countdown plus configurable alarm sounds do the rest.
 
 ## Requirements
