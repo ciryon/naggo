@@ -25,6 +25,20 @@ This drops a `naggo` binary into your `$GOBIN` (default: `$GOPATH/bin`). Make su
 naggo
 ```
 
+You can also just grab a pre-built binary from the [releases page](../releases).
+
+### MacOS
+
+If you install go via homebrew you might need to update your $PATH to include the go bin directory:
+
+```bash
+brew install go
+
+# add to ~/.zshrc:
+export GOPATH=$HOME/go
+export PATH=$PATH:$GOPATH/bin
+```
+
 ## Build From Source
 
 ```bash
