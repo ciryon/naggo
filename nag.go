@@ -185,7 +185,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "/":
 			if len(m.alarmSounds) > 0 {
 				m.alarmIdx = (m.alarmIdx + 1) % len(m.alarmSounds)
-				playSound(m.adjustSound)
+				playSound(m.currentAlarm())
 			}
 		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 			minutes := time.Duration(msg.String()[0]-'0') * time.Minute
