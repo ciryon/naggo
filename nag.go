@@ -60,10 +60,11 @@ func initialModel() model {
 }
 
 const (
-	alarmRepeatInterval = time.Minute
-	blinkInterval       = 250 * time.Millisecond
-	tickInterval        = 250 * time.Millisecond
-	colonBlinkInterval  = 500 * time.Millisecond
+	alarmRepeatInterval  = time.Minute
+	alarmPreviewDuration = 3 * time.Second
+	blinkInterval        = 250 * time.Millisecond
+	tickInterval         = 250 * time.Millisecond
+	colonBlinkInterval   = 500 * time.Millisecond
 )
 
 func (m *model) activateAlarm(now time.Time) {
@@ -182,10 +183,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.silenceAlarm()
 			playSound(m.adjustSound)
+		case "+", "=":
+			m.remaining += time.Second
+			m.silenceAlarm()
+			playSound(m.adjustSound)
+		case "-":
+			if m.remaining > time.Second {
+				m.remaining -= time.Second
+			} else {
+				m.remaining = time.Second
+			}
+			m.silenceAlarm()
+			playSound(m.adjustSound)
 		case "/":
 			if len(m.alarmSounds) > 0 {
+				stopAllPlayback()
 				m.alarmIdx = (m.alarmIdx + 1) % len(m.alarmSounds)
-				playSound(m.adjustSound)
+				playSoundFor(m.currentAlarm(), alarmPreviewDuration)
 			}
 		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 			minutes := time.Duration(msg.String()[0]-'0') * time.Minute
@@ -248,8 +262,9 @@ func (m model) View() string {
 		"down -1m",
 		"right +1h",
 		"left -1h",
+		"+/- +/-1s",
 		"1-9 set minutes",
-		"/ cycle alarm",
+		"/ cycle + test alarm",
 		"q quit",
 	}, " • ")
 
@@ -637,6 +652,15 @@ func playSound(clip soundClip) {
 		}
 
 		player := ctx.NewPlayer(bytes.NewReader(c.data))
+		playbackMu.Lock()
+		players[player] = struct{}{}
+		playbackMu.Unlock()
+		defer func() {
+			playbackMu.Lock()
+			delete(players, player)
+			playbackMu.Unlock()
+		}()
+
 		player.Play()
 
 		ticker := time.NewTicker(25 * time.Millisecond)
@@ -651,6 +675,45 @@ func playSound(clip soundClip) {
 	}(clip)
 }
 
+func playSoundFor(clip soundClip, duration time.Duration) {
+	if duration <= 0 {
+		return
+	}
+	if len(clip.data) == 0 {
+		playSound(clip)
+		return
+	}
+
+	targetBytes := int((duration * time.Duration(audioSampleRate*audioChannels*2)) / time.Second)
+	if targetBytes <= 0 {
+		playSound(clip)
+		return
+	}
+
+	trimmed := repeatClipData(clip.data, targetBytes)
+	playSound(soundClip{name: clip.name, data: trimmed})
+}
+
+func repeatClipData(data []byte, target int) []byte {
+	if len(data) == 0 || target <= 0 {
+		return nil
+	}
+
+	if target%2 != 0 {
+		target--
+	}
+	if target <= 0 {
+		return nil
+	}
+
+	out := make([]byte, target)
+	written := 0
+	for written < target {
+		written += copy(out[written:], data)
+	}
+	return out
+}
+
 const (
 	audioSampleRate = 44100
 	audioChannels   = 1
@@ -662,7 +725,22 @@ var (
 	audioCtxErr  error
 	audioReady   chan struct{}
 	readyOnce    sync.Once
+	playbackMu   sync.Mutex
+	players      = map[oto.Player]struct{}{}
 )
+
+func stopAllPlayback() {
+	playbackMu.Lock()
+	active := make([]oto.Player, 0, len(players))
+	for player := range players {
+		active = append(active, player)
+	}
+	playbackMu.Unlock()
+
+	for _, player := range active {
+		_ = player.Close()
+	}
+}
 
 func ensureAudioContext() (*oto.Context, error) {
 	audioCtxOnce.Do(func() {

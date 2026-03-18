@@ -74,8 +74,9 @@ Repeat with the desired `GOOS`/`GOARCH` pairs (e.g. `linux/amd64`, `linux/arm64`
 - `s` stop (silence nag)
 - `up/down` ±1 minute (the last minute counts down in 1‑second steps)
 - `right/left` ±1 hour
+- `+/-` ±1 second
 - `1`–`9` set timer to N minutes
-- `/` cycle alarm sound
+- `/` cycle alarm sound and preview it for 3 seconds
 - `q` quit
 
 Enjoy the nag. 😄
