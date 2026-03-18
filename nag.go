@@ -35,6 +35,7 @@ type model struct {
 	lastTick          time.Time
 	colonVisible      bool
 	lastColonToggle   time.Time
+	lastAdjustPlay    time.Time
 	stopPromptVisible bool
 }
 
@@ -62,10 +63,19 @@ func initialModel() model {
 const (
 	alarmRepeatInterval  = time.Minute
 	alarmPreviewDuration = 3 * time.Second
+	adjustSoundCooldown  = 140 * time.Millisecond
 	blinkInterval        = 250 * time.Millisecond
 	tickInterval         = 250 * time.Millisecond
 	colonBlinkInterval   = 500 * time.Millisecond
 )
+
+func (m *model) playAdjustSoundThrottled(now time.Time) {
+	if !m.lastAdjustPlay.IsZero() && now.Sub(m.lastAdjustPlay) < adjustSoundCooldown {
+		return
+	}
+	m.lastAdjustPlay = now
+	playSound(m.adjustSound)
+}
 
 func (m *model) activateAlarm(now time.Time) {
 	m.alarmActive = true
@@ -160,7 +170,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "up":
 			m.remaining += time.Minute
 			m.silenceAlarm()
-			playSound(m.adjustSound)
+			m.playAdjustSoundThrottled(time.Now())
 		case "down":
 			if m.remaining > time.Minute {
 				m.remaining -= time.Minute
@@ -170,11 +180,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.remaining = time.Second
 			}
 			m.silenceAlarm()
-			playSound(m.adjustSound)
+			m.playAdjustSoundThrottled(time.Now())
 		case "right":
 			m.remaining += time.Hour
 			m.silenceAlarm()
-			playSound(m.adjustSound)
+			m.playAdjustSoundThrottled(time.Now())
 		case "left":
 			if m.remaining > time.Hour {
 				m.remaining -= time.Hour
@@ -182,11 +192,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.remaining = time.Minute
 			}
 			m.silenceAlarm()
-			playSound(m.adjustSound)
+			m.playAdjustSoundThrottled(time.Now())
 		case "+", "=":
 			m.remaining += time.Second
 			m.silenceAlarm()
-			playSound(m.adjustSound)
+			m.playAdjustSoundThrottled(time.Now())
 		case "-":
 			if m.remaining > time.Second {
 				m.remaining -= time.Second
@@ -194,7 +204,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.remaining = time.Second
 			}
 			m.silenceAlarm()
-			playSound(m.adjustSound)
+			m.playAdjustSoundThrottled(time.Now())
 		case "/":
 			if len(m.alarmSounds) > 0 {
 				stopAllPlayback()
@@ -249,6 +259,15 @@ func (m model) View() string {
 	ascii := renderCountdownFigure(countdownText, showCountdown, colonVisible)
 	countdownBlock := borderStyle.Render(countdownStyle.Render(ascii))
 
+	triggerText := "Nag triggers: now"
+	if m.remaining > 0 {
+		triggerText = fmt.Sprintf("Nag triggers at: %s", time.Now().Add(m.remaining).Format("15:04:05"))
+	}
+	triggerLine := lipgloss.NewStyle().
+		Width(lipgloss.Width(countdownBlock)).
+		Align(lipgloss.Center).
+		Render(triggerText)
+
 	soundLine := fmt.Sprintf("Alarm: %s", soundLabelStyle.Render(m.alarmName()))
 	alarmInfo := ""
 	if m.alarmActive {
@@ -271,6 +290,7 @@ func (m model) View() string {
 	lines := []string{
 		titleStyle.Render("Nag Timer"),
 		countdownBlock,
+		triggerLine,
 	}
 	if m.stopPromptVisible {
 		stopText := lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Bold(true).Render("Press s to stop")
@@ -278,6 +298,7 @@ func (m model) View() string {
 	} else if alarmInfo != "" {
 		lines = append(lines, alarmInfo)
 	}
+	lines = append(lines, "")
 	lines = append(lines, soundLine)
 	lines = append(lines, helpStyle.Render(help))
 
